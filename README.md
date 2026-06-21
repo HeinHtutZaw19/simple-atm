@@ -54,6 +54,93 @@ The same ports power the tests: `tests/Fakes.h` provides in-memory `FakeBank` /
 that doubles as an executable specification (state guards, PIN-attempt limits,
 deposit/withdraw, rollback, session reset).
 
+## Architecture (UML)
+
+### Class Diagram
+
+```mermaid
+classDiagram
+
+    class ATMController {
+        -state State
+        -bank IBankService
+        -cashBin ICashBin
+        +insertCard()
+        +enterPin()
+        +selectAccount()
+        +checkBalance()
+        +deposit()
+        +withdraw()
+        +ejectCard()
+    }
+
+    class IBankService {
+        <<interface>>
+        +validatePin()
+        +getBalance()
+        +deposit()
+        +withdraw()
+    }
+
+    class ICashBin {
+        <<interface>>
+        +canDispense()
+        +dispense()
+        +accept()
+    }
+
+    class FakeBank {
+        <<test>>
+    }
+
+    class FakeCashBin {
+        <<test>>
+    }
+
+    ATMController --> IBankService
+    ATMController --> ICashBin
+
+    FakeBank ..|> IBankService
+    FakeCashBin ..|> ICashBin
+
+
+    class State {
+        <<enum>>
+        Idle
+        Authenticating
+        SelectingAccount
+        Transacting
+    }
+
+    ATMController --> State
+```
+
+### State diagram — session flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Authenticating : insertCard(card)
+    Authenticating --> Authenticating : enterPin(wrong) [attempts remain] / InvalidPinError
+    Authenticating --> SelectingAccount : enterPin(correct)
+    Authenticating --> Idle : enterPin(wrong) [limit reached] / CardBlockedError
+    SelectingAccount --> Transacting : selectAccount(id)
+    Transacting --> Transacting : checkBalance / deposit / withdraw / selectAccount
+    Authenticating --> Idle : ejectCard()
+    SelectingAccount --> Idle : ejectCard()
+    Transacting --> Idle : ejectCard()
+```
+
+### Design Idea
+```mermaid
+flowchart LR
+    User --> ATMController
+    ATMController --> IBankService
+    ATMController --> ICashBin
+    IBankService --> FakeBank
+    ICashBin --> FakeCashBin
+```
+
 ## Notes & Assumptions
 
 - `Money` is `int` (whole dollars) — simple and sufficient for this exercise; a
